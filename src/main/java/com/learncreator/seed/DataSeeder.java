@@ -32,7 +32,7 @@ import java.util.List;
  * Seeds realistic mock data for local testing — every login below uses the password "password123".
  *
  * NEVER runs by default. Only active when the "seed" Spring profile is enabled, e.g.:
- *   ./mvnw spring-boot:run -Dspring-boot.run.profiles=seed
+ *   mvn spring-boot:run -Dspring-boot.run.profiles=seed
  *   or  SPRING_PROFILES_ACTIVE=seed  as an env var (see docker-compose override in the README)
  *
  * Idempotent: does nothing if any users already exist, so restarting the app with the seed

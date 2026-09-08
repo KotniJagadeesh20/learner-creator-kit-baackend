@@ -83,7 +83,7 @@ class CreatorApplicationServiceTest {
                 .pitch("pitch")
                 .status(ApplicationStatus.PENDING)
                 .build();
-        when(applicationRepository.findById(application.getId())).thenReturn(Optional.of(application));
+        when(applicationRepository.findByIdForUpdate(application.getId())).thenReturn(Optional.of(application));
 
         service.approve(application.getId(), admin);
 
@@ -103,7 +103,7 @@ class CreatorApplicationServiceTest {
                 .pitch("pitch")
                 .status(ApplicationStatus.APPROVED) // already reviewed once
                 .build();
-        when(applicationRepository.findById(alreadyApproved.getId())).thenReturn(Optional.of(alreadyApproved));
+        when(applicationRepository.findByIdForUpdate(alreadyApproved.getId())).thenReturn(Optional.of(alreadyApproved));
 
         assertThatThrownBy(() -> service.approve(alreadyApproved.getId(), admin))
                 .isInstanceOf(ResponseStatusException.class)
@@ -120,7 +120,7 @@ class CreatorApplicationServiceTest {
                 .pitch("pitch")
                 .status(ApplicationStatus.PENDING)
                 .build();
-        when(applicationRepository.findById(application.getId())).thenReturn(Optional.of(application));
+        when(applicationRepository.findByIdForUpdate(application.getId())).thenReturn(Optional.of(application));
 
         service.reject(application.getId(), "Not enough detail on teaching experience", admin);
 

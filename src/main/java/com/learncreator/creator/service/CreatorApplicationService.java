@@ -11,6 +11,7 @@ import com.learncreator.creator.repository.CreatorApplicationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class CreatorApplicationService {
 
     private final CreatorApplicationRepository applicationRepository;
@@ -54,7 +56,7 @@ public class CreatorApplicationService {
     }
 
     public CreatorApplicationResponse approve(UUID applicationId, User admin) {
-        CreatorApplication application = findPendingOrThrow(applicationId);
+        CreatorApplication application = findPendingForReviewOrThrow(applicationId);
 
         application.setStatus(ApplicationStatus.APPROVED);
         application.setReviewedBy(admin);
@@ -70,7 +72,7 @@ public class CreatorApplicationService {
     }
 
     public CreatorApplicationResponse reject(UUID applicationId, String reason, User admin) {
-        CreatorApplication application = findPendingOrThrow(applicationId);
+        CreatorApplication application = findPendingForReviewOrThrow(applicationId);
 
         application.setStatus(ApplicationStatus.REJECTED);
         application.setRejectionReason(reason);
@@ -81,8 +83,8 @@ public class CreatorApplicationService {
         return CreatorApplicationResponse.from(application);
     }
 
-    private CreatorApplication findPendingOrThrow(UUID applicationId) {
-        CreatorApplication application = applicationRepository.findById(applicationId)
+    private CreatorApplication findPendingForReviewOrThrow(UUID applicationId) {
+        CreatorApplication application = applicationRepository.findByIdForUpdate(applicationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
 
         if (application.getStatus() != ApplicationStatus.PENDING) {

@@ -91,6 +91,14 @@ public class CourseController {
 
     // ---- Lessons ----
 
+    @GetMapping("/lessons/{lessonId}/playback")
+    public ResponseEntity<LessonPlaybackResponse> getLessonPlayback(
+            @PathVariable UUID lessonId,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(courseService.getLessonPlayback(lessonId, currentUser(authentication)));
+    }
+
     @PostMapping("/modules/{moduleId}/lessons")
     public ResponseEntity<LessonResponse> addLesson(
             @PathVariable UUID moduleId,

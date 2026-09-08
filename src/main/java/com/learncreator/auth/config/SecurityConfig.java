@@ -1,6 +1,7 @@
 package com.learncreator.auth.config;
 
 import com.learncreator.auth.security.JwtAuthFilter;
+import com.learncreator.auth.security.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +30,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final UserDetailsService userDetailsService;
 
     @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:8081}")
@@ -76,6 +78,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         // Order matters: more specific rules must come before the general GET rule below.
                         .requestMatchers(HttpMethod.GET, "/api/courses/mine").hasAnyRole("CREATOR", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/courses/lessons/*/playback").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/courses/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/courses/**").hasAnyRole("CREATOR", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/courses/**").hasAnyRole("CREATOR", "ADMIN")
@@ -99,6 +102,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())
+                .addFilterBefore(rateLimitFilter, JwtAuthFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

@@ -59,7 +59,7 @@ class RefreshTokenServiceTest {
                 .tokenHash(hashFor(rawToken))
                 .build();
 
-        when(refreshTokenRepository.findByTokenHash(hashFor(rawToken))).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.findByTokenHashForUpdate(hashFor(rawToken))).thenReturn(Optional.of(stored));
 
         var result = refreshTokenService.validateAndRotate(rawToken);
 
@@ -72,7 +72,7 @@ class RefreshTokenServiceTest {
 
     @Test
     void validateAndRotate_rejects_whenTokenNotFound() {
-        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.empty());
+        when(refreshTokenRepository.findByTokenHashForUpdate(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> refreshTokenService.validateAndRotate("unknown-token"))
                 .isInstanceOf(ResponseStatusException.class)
@@ -90,7 +90,7 @@ class RefreshTokenServiceTest {
                 .tokenHash(hashFor(rawToken))
                 .build();
 
-        when(refreshTokenRepository.findByTokenHash(hashFor(rawToken))).thenReturn(Optional.of(expired));
+        when(refreshTokenRepository.findByTokenHashForUpdate(hashFor(rawToken))).thenReturn(Optional.of(expired));
 
         assertThatThrownBy(() -> refreshTokenService.validateAndRotate(rawToken))
                 .isInstanceOf(ResponseStatusException.class)
@@ -109,7 +109,7 @@ class RefreshTokenServiceTest {
                 .tokenHash(hashFor(rawToken))
                 .build();
 
-        when(refreshTokenRepository.findByTokenHash(hashFor(rawToken))).thenReturn(Optional.of(revoked));
+        when(refreshTokenRepository.findByTokenHashForUpdate(hashFor(rawToken))).thenReturn(Optional.of(revoked));
 
         assertThatThrownBy(() -> refreshTokenService.validateAndRotate(rawToken))
                 .isInstanceOf(ResponseStatusException.class);

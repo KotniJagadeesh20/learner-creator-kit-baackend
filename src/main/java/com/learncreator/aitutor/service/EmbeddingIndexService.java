@@ -4,7 +4,9 @@ import com.learncreator.courses.entity.Lesson;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +31,7 @@ public class EmbeddingIndexService {
     private static final Pattern PARAGRAPH_SPLIT = Pattern.compile("\\n\\s*\\n");
     private static final int MAX_CHUNK_CHARS = 1200;
 
+    @Transactional
     public void indexTranscript(Lesson lesson, String transcriptText) {
         List<Document> documents = new ArrayList<>();
         List<String> chunks = chunk(transcriptText);
@@ -44,6 +47,8 @@ public class EmbeddingIndexService {
             documents.add(new Document(chunks.get(i), metadata));
         }
 
+        vectorStore.delete(new FilterExpressionBuilder()
+                .eq("lessonId", lesson.getId().toString()).build());
         if (!documents.isEmpty()) {
             vectorStore.add(documents);
         }
@@ -55,6 +60,16 @@ public class EmbeddingIndexService {
 
         StringBuilder current = new StringBuilder();
         for (String paragraph : paragraphs) {
+            if (paragraph.length() > MAX_CHUNK_CHARS) {
+                if (!current.isEmpty()) {
+                    result.add(current.toString().trim());
+                    current = new StringBuilder();
+                }
+                for (int start = 0; start < paragraph.length(); start += MAX_CHUNK_CHARS) {
+                    result.add(paragraph.substring(start, Math.min(start + MAX_CHUNK_CHARS, paragraph.length())));
+                }
+                continue;
+            }
             if (current.length() + paragraph.length() > MAX_CHUNK_CHARS && !current.isEmpty()) {
                 result.add(current.toString().trim());
                 current = new StringBuilder();

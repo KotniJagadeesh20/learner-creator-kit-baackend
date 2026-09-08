@@ -16,8 +16,11 @@ import org.springframework.ai.audio.transcription.AudioTranscriptionResponse;
 import org.springframework.ai.model.Model;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -35,6 +38,7 @@ public class TranscriptionService {
     // Spring AI's OpenAI starter auto-configures this bean from spring.ai.openai.api-key —
     // no manual @Bean needed, same as EmbeddingModel/VectorStore.
     private final Model<AudioTranscriptionPrompt, AudioTranscriptionResponse> audioTranscriptionModel;
+    private final TranscriptionJobLauncher transcriptionJobLauncher;
 
     private static final int MAX_POLL_ATTEMPTS = 40; // ~10 minutes at 15s intervals — generous for a typical lesson video
     private static final long POLL_INTERVAL_MS = 15_000;
@@ -44,6 +48,7 @@ public class TranscriptionService {
      * or a fallback if automatic generation fails. Kept exactly as originally built; automatic
      * generation (below) is an addition, not a replacement.
      */
+    @Transactional
     public void setManualTranscript(UUID lessonId, String transcriptText, User requester) {
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lesson not found"));
@@ -64,21 +69,42 @@ public class TranscriptionService {
      * Runs asynchronously (@Async) — the triggering HTTP request returns immediately with
      * status PROCESSING; the frontend polls getTranscriptStatus() to know when it's done.
      */
-    @Async
+    @Transactional
     public void generateTranscriptAutomatically(UUID lessonId, User requester) {
-        Lesson lesson = lessonRepository.findById(lessonId)
+        Lesson lesson = lessonRepository.findByIdForUpdate(lessonId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lesson not found"));
         requireOwnerOrAdmin(lesson, requester);
 
         if (lesson.getVideoRef() == null) {
-            markFailed(lesson, "Lesson has no uploaded video yet");
-            return;
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lesson has no uploaded video yet");
         }
 
         LessonTranscript transcript = transcriptRepository.findByLessonId(lessonId)
                 .orElseGet(() -> LessonTranscript.builder().lesson(lesson).build());
+        if (transcript.getStatus() == TranscriptStatus.PROCESSING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Transcript generation is already in progress");
+        }
         transcript.setStatus(TranscriptStatus.PROCESSING);
         transcriptRepository.save(transcript);
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    transcriptionJobLauncher.launch(lessonId);
+                } catch (TaskRejectedException e) {
+                    log.warn("Transcription queue is full for lessonId={}", lessonId);
+                    markFailed(lessonId, "Transcription queue is full; please retry");
+                }
+            }
+        });
+    }
+
+    public void processAutomaticTranscription(UUID lessonId) {
+        Lesson lesson = lessonRepository.findByIdWithContext(lessonId)
+                .orElseThrow(() -> new IllegalStateException("Lesson disappeared while transcription was queued"));
+        LessonTranscript transcript = transcriptRepository.findByLessonId(lessonId)
+                .orElseThrow(() -> new IllegalStateException("Transcript job state is missing"));
 
         try {
             String audioUrl = extractAudioUrl(lesson.getVideoRef());
@@ -90,7 +116,7 @@ public class TranscriptionService {
 
         } catch (Exception e) {
             log.error("Automatic transcript generation failed for lessonId={}", lessonId, e);
-            markFailed(lesson, e.getMessage());
+            markFailed(lessonId, e.getMessage());
         }
     }
 
@@ -145,18 +171,17 @@ public class TranscriptionService {
 
     private void saveAndIndex(Lesson lesson, LessonTranscript transcript, String transcriptText) {
         transcript.setFullText(transcriptText);
+        embeddingIndexService.indexTranscript(lesson, transcriptText);
         transcript.setStatus(TranscriptStatus.READY);
         transcriptRepository.save(transcript);
-
-        embeddingIndexService.indexTranscript(lesson, transcriptText);
     }
 
-    private void markFailed(Lesson lesson, String reason) {
-        LessonTranscript transcript = transcriptRepository.findByLessonId(lesson.getId())
-                .orElseGet(() -> LessonTranscript.builder().lesson(lesson).build());
+    void markFailed(UUID lessonId, String reason) {
+        LessonTranscript transcript = transcriptRepository.findByLessonId(lessonId)
+                .orElseThrow(() -> new IllegalStateException("Transcript job state is missing"));
         transcript.setStatus(TranscriptStatus.FAILED);
         transcriptRepository.save(transcript);
-        log.warn("Transcript generation marked FAILED for lessonId={}: {}", lesson.getId(), reason);
+        log.warn("Transcript generation marked FAILED for lessonId={}: {}", lessonId, reason);
     }
 
     private void requireOwnerOrAdmin(Lesson lesson, User requester) {

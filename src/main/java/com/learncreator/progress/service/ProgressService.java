@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -64,7 +65,9 @@ public class ProgressService {
     }
 
     private CourseProgressResponse buildCourseProgress(Course course, Enrollment enrollment) {
-        List<Lesson> allLessons = lessonRepository.findByModule_Course_Id(course.getId());
+        // Repository implementations and test doubles may return immutable lists. Copy before
+        // applying the presentation order rather than mutating a caller-owned collection.
+        List<Lesson> allLessons = new ArrayList<>(lessonRepository.findByModule_Course_Id(course.getId()));
         allLessons.sort(Comparator
                 .comparing((Lesson l) -> l.getModule().getOrderIndex())
                 .thenComparing(Lesson::getOrderIndex));

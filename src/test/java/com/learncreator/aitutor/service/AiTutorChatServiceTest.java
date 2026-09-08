@@ -83,7 +83,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void askQuestion_rejects_whenLearnerNotEnrolled() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(false);
 
         assertThatThrownBy(() -> service.askQuestion(lesson.getId(), new AskQuestionRequest("what is state?", false), learner))
@@ -95,7 +95,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void askQuestion_defaultPath_answersFromTranscript_andCitesCurrentLesson() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(true);
         when(threadRepository.findByUserIdAndLessonId(learner.getId(), lesson.getId())).thenReturn(Optional.of(thread));
         when(messageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -119,7 +119,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void askQuestion_escalatesAutomatically_whenModelSignalsNotCovered() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(true);
         when(threadRepository.findByUserIdAndLessonId(learner.getId(), lesson.getId())).thenReturn(Optional.of(thread));
         when(messageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -152,24 +152,24 @@ class AiTutorChatServiceTest {
 
     @Test
     void askQuestion_forceBroaderSearch_skipsDefaultPathEntirely() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(true);
         when(threadRepository.findByUserIdAndLessonId(learner.getId(), lesson.getId())).thenReturn(Optional.of(thread));
         when(messageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
-        stubChatClientToReturn("irrelevant — no results branch returns before using this");
 
         var result = service.askQuestion(lesson.getId(), new AskQuestionRequest("something unrelated", true), learner);
 
         assertThat(result.get(1).content()).isEqualTo("This topic isn't covered in the current course.");
         assertThat(result.get(1).usedBroaderSearch()).isTrue();
         verify(transcriptRepository, never()).findByLessonId(any()); // never even checked the transcript
+        verifyNoInteractions(chatClient); // no retrieved context means there is no reason to call the model
     }
 
     @Test
     void getHistory_rejects_whenLearnerNotEnrolled() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(false);
 
         assertThatThrownBy(() -> service.getHistory(lesson.getId(), learner))
@@ -179,7 +179,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void getHistory_returnsEmptyList_whenNoThreadExistsYet() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(true);
         when(threadRepository.findByUserIdAndLessonId(learner.getId(), lesson.getId())).thenReturn(Optional.empty());
 
