@@ -16,6 +16,7 @@ import org.springframework.ai.audio.transcription.AudioTranscriptionResponse;
 import org.springframework.ai.model.Model;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -89,7 +90,12 @@ public class TranscriptionService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                transcriptionJobLauncher.launch(lessonId);
+                try {
+                    transcriptionJobLauncher.launch(lessonId);
+                } catch (TaskRejectedException e) {
+                    log.warn("Transcription queue is full for lessonId={}", lessonId);
+                    markFailed(lessonId, "Transcription queue is full; please retry");
+                }
             }
         });
     }
@@ -110,7 +116,7 @@ public class TranscriptionService {
 
         } catch (Exception e) {
             log.error("Automatic transcript generation failed for lessonId={}", lessonId, e);
-            markFailed(lesson, e.getMessage());
+            markFailed(lessonId, e.getMessage());
         }
     }
 
@@ -170,12 +176,12 @@ public class TranscriptionService {
         transcriptRepository.save(transcript);
     }
 
-    private void markFailed(Lesson lesson, String reason) {
-        LessonTranscript transcript = transcriptRepository.findByLessonId(lesson.getId())
-                .orElseGet(() -> LessonTranscript.builder().lesson(lesson).build());
+    void markFailed(UUID lessonId, String reason) {
+        LessonTranscript transcript = transcriptRepository.findByLessonId(lessonId)
+                .orElseThrow(() -> new IllegalStateException("Transcript job state is missing"));
         transcript.setStatus(TranscriptStatus.FAILED);
         transcriptRepository.save(transcript);
-        log.warn("Transcript generation marked FAILED for lessonId={}: {}", lesson.getId(), reason);
+        log.warn("Transcript generation marked FAILED for lessonId={}: {}", lessonId, reason);
     }
 
     private void requireOwnerOrAdmin(Lesson lesson, User requester) {

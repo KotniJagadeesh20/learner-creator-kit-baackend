@@ -83,7 +83,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void askQuestion_rejects_whenLearnerNotEnrolled() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(false);
 
         assertThatThrownBy(() -> service.askQuestion(lesson.getId(), new AskQuestionRequest("what is state?", false), learner))
@@ -95,7 +95,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void askQuestion_defaultPath_answersFromTranscript_andCitesCurrentLesson() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(true);
         when(threadRepository.findByUserIdAndLessonId(learner.getId(), lesson.getId())).thenReturn(Optional.of(thread));
         when(messageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -119,7 +119,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void askQuestion_escalatesAutomatically_whenModelSignalsNotCovered() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(true);
         when(threadRepository.findByUserIdAndLessonId(learner.getId(), lesson.getId())).thenReturn(Optional.of(thread));
         when(messageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -152,7 +152,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void askQuestion_forceBroaderSearch_skipsDefaultPathEntirely() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(true);
         when(threadRepository.findByUserIdAndLessonId(learner.getId(), lesson.getId())).thenReturn(Optional.of(thread));
         when(messageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -169,7 +169,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void getHistory_rejects_whenLearnerNotEnrolled() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(false);
 
         assertThatThrownBy(() -> service.getHistory(lesson.getId(), learner))
@@ -179,7 +179,7 @@ class AiTutorChatServiceTest {
 
     @Test
     void getHistory_returnsEmptyList_whenNoThreadExistsYet() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
         when(enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), course.getId())).thenReturn(true);
         when(threadRepository.findByUserIdAndLessonId(learner.getId(), lesson.getId())).thenReturn(Optional.empty());
 

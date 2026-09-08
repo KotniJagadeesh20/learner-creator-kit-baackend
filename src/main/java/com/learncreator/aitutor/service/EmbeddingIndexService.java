@@ -6,6 +6,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +31,7 @@ public class EmbeddingIndexService {
     private static final Pattern PARAGRAPH_SPLIT = Pattern.compile("\\n\\s*\\n");
     private static final int MAX_CHUNK_CHARS = 1200;
 
+    @Transactional
     public void indexTranscript(Lesson lesson, String transcriptText) {
         List<Document> documents = new ArrayList<>();
         List<String> chunks = chunk(transcriptText);

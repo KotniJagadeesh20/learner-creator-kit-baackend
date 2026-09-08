@@ -20,6 +20,8 @@ import org.springframework.ai.audio.transcription.AudioTranscriptionPrompt;
 import org.springframework.ai.audio.transcription.AudioTranscriptionResponse;
 import org.springframework.ai.model.Model;
 import org.springframework.http.HttpStatus;
+import org.springframework.core.task.TaskRejectedException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
@@ -112,18 +114,37 @@ class TranscriptionServiceTest {
     }
 
     @Test
-    void generateTranscriptAutomatically_marksFailed_whenCloudflareRequestFails() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
-        when(transcriptRepository.findByLessonId(lesson.getId())).thenReturn(Optional.empty());
+    void generateTranscriptAutomatically_marksFailed_whenExecutorRejectsJob() {
+        LessonTranscript transcript = LessonTranscript.builder().lesson(lesson).status(TranscriptStatus.PENDING).build();
+        when(lessonRepository.findByIdForUpdate(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(transcriptRepository.findByLessonId(lesson.getId())).thenReturn(Optional.of(transcript));
+        doThrow(new TaskRejectedException("queue full")).when(transcriptionJobLauncher).launch(lesson.getId());
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.generateTranscriptAutomatically(lesson.getId(), creator);
+            TransactionSynchronizationManager.getSynchronizations().forEach(synchronization -> synchronization.afterCommit());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        assertThat(transcript.getStatus()).isEqualTo(TranscriptStatus.FAILED);
+        verify(transcriptRepository, atLeast(2)).save(transcript);
+    }
+
+    @Test
+    void processAutomaticTranscription_marksFailed_whenCloudflareRequestFails() {
+        LessonTranscript transcript = LessonTranscript.builder().lesson(lesson).status(TranscriptStatus.PROCESSING).build();
+        when(lessonRepository.findByIdWithContext(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(transcriptRepository.findByLessonId(lesson.getId())).thenReturn(Optional.of(transcript));
         // Fails on the very first Cloudflare call, before the polling loop ever sleeps.
         when(cloudflareStreamClient.requestAudioDownload("cf-video-123"))
                 .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Cloudflare unavailable"));
 
-        service.generateTranscriptAutomatically(lesson.getId(), creator);
+        service.processAutomaticTranscription(lesson.getId());
 
-        ArgumentCaptor<LessonTranscript> captor = ArgumentCaptor.forClass(LessonTranscript.class);
-        verify(transcriptRepository, atLeast(2)).save(captor.capture()); // PROCESSING, then FAILED
-        assertThat(captor.getValue().getStatus()).isEqualTo(TranscriptStatus.FAILED);
+        assertThat(transcript.getStatus()).isEqualTo(TranscriptStatus.FAILED);
+        verify(transcriptRepository).save(transcript);
         verifyNoInteractions(audioTranscriptionModel); // never got as far as calling Whisper
     }
 

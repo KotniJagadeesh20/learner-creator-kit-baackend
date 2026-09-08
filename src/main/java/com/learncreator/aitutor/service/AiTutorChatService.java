@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class AiTutorChatService {
 
     private final ChatClient chatClient;
@@ -48,7 +47,7 @@ public class AiTutorChatService {
     private static final String NO_RESULTS_MESSAGE = "This topic isn't covered in the current course.";
 
     public List<ChatMessageResponse> askQuestion(UUID lessonId, AskQuestionRequest request, User learner) {
-        Lesson lesson = lessonRepository.findById(lessonId)
+        Lesson lesson = lessonRepository.findByIdWithContext(lessonId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lesson not found"));
         Course course = lesson.getModule().getCourse();
 
@@ -69,8 +68,9 @@ public class AiTutorChatService {
         return List.of(ChatMessageResponse.from(userMessage), ChatMessageResponse.from(assistantMessage));
     }
 
+    @Transactional(readOnly = true)
     public List<ChatMessageResponse> getHistory(UUID lessonId, User learner) {
-        Lesson lesson = lessonRepository.findById(lessonId)
+        Lesson lesson = lessonRepository.findByIdWithContext(lessonId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lesson not found"));
 
         if (!enrollmentRepository.existsByUserIdAndCourseId(learner.getId(), lesson.getModule().getCourse().getId())) {
