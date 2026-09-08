@@ -158,13 +158,13 @@ class AiTutorChatServiceTest {
         when(messageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
-        stubChatClientToReturn("irrelevant — no results branch returns before using this");
 
         var result = service.askQuestion(lesson.getId(), new AskQuestionRequest("something unrelated", true), learner);
 
         assertThat(result.get(1).content()).isEqualTo("This topic isn't covered in the current course.");
         assertThat(result.get(1).usedBroaderSearch()).isTrue();
         verify(transcriptRepository, never()).findByLessonId(any()); // never even checked the transcript
+        verifyNoInteractions(chatClient); // no retrieved context means there is no reason to call the model
     }
 
     @Test
