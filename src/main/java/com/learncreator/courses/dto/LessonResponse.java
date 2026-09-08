@@ -20,4 +20,10 @@ public record LessonResponse(
                 lesson.getOrderIndex()
         );
     }
+
+    public static LessonResponse publicMetadata(Lesson lesson) {
+        return new LessonResponse(
+                lesson.getId(), lesson.getTitle(), null, lesson.getDurationSeconds(), lesson.getOrderIndex()
+        );
+    }
 }

@@ -7,9 +7,11 @@ import com.learncreator.courses.entity.*;
 import com.learncreator.courses.repository.CourseRepository;
 import com.learncreator.courses.repository.LessonRepository;
 import com.learncreator.courses.repository.ModuleRepository;
+import com.learncreator.enrollments.repository.EnrollmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -18,11 +20,13 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class CourseService {
 
     private final CourseRepository courseRepository;
     private final ModuleRepository moduleRepository;
     private final LessonRepository lessonRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     // ---- Courses ----
 
@@ -43,7 +47,7 @@ public class CourseService {
         if (course.getStatus() == CourseStatus.DRAFT && !isOwnerOrAdmin(course, requester)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found");
         }
-        return CourseResponse.from(course);
+        return isOwnerOrAdmin(course, requester) ? CourseResponse.from(course) : CourseResponse.publicDetails(course);
     }
 
     public CourseResponse create(CourseRequest request, User creator) {
@@ -81,8 +85,9 @@ public class CourseService {
         Course course = findCourseOrThrow(courseId);
         requireOwnerOrAdmin(course, requester);
 
-        if (status == CourseStatus.PUBLISHED && course.getModules().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot publish a course with no modules");
+        if (status == CourseStatus.PUBLISHED && course.getModules().stream()
+                .flatMap(module -> module.getLessons().stream()).findAny().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot publish a course with no lessons");
         }
 
         course.setStatus(status);
@@ -132,6 +137,17 @@ public class CourseService {
         return LessonResponse.from(lesson);
     }
 
+    public LessonPlaybackResponse getLessonPlayback(UUID lessonId, User requester) {
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lesson not found"));
+        Course course = lesson.getModule().getCourse();
+        boolean enrolled = enrollmentRepository.existsByUserIdAndCourseId(requester.getId(), course.getId());
+        if (!enrolled && !isOwnerOrAdmin(course, requester)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You must be enrolled to play this lesson");
+        }
+        return new LessonPlaybackResponse(lesson.getId(), lesson.getVideoRef());
+    }
+
     // ---- Helpers ----
 
     private Course findCourseOrThrow(UUID courseId) {
@@ -146,7 +162,7 @@ public class CourseService {
     }
 
     private boolean isOwnerOrAdmin(Course course, User user) {
-        return course.getCreator().getId().equals(user.getId()) || user.getRole() == Role.ADMIN;
+        return user != null && (course.getCreator().getId().equals(user.getId()) || user.getRole() == Role.ADMIN);
     }
 
     private void requireOwnerOrAdmin(Course course, User user) {

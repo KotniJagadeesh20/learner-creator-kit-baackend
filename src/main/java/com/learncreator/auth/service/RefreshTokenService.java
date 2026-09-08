@@ -6,6 +6,7 @@ import com.learncreator.auth.repository.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
@@ -48,10 +49,11 @@ public class RefreshTokenService {
      * Rotation means a stolen refresh token is only useful once before
      * the legitimate user's next refresh silently invalidates it.
      */
+    @Transactional
     public RotationResult validateAndRotate(String rawToken) {
         String incomingHash = hash(rawToken);
 
-        RefreshToken existing = refreshTokenRepository.findByTokenHash(incomingHash)
+        RefreshToken existing = refreshTokenRepository.findByTokenHashForUpdate(incomingHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token"));
 
         if (!existing.isValid()) {

@@ -9,6 +9,7 @@ import com.learncreator.courses.entity.CourseStatus;
 import com.learncreator.courses.repository.CourseRepository;
 import com.learncreator.courses.repository.LessonRepository;
 import com.learncreator.courses.repository.ModuleRepository;
+import com.learncreator.enrollments.repository.EnrollmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +33,7 @@ class CourseServiceTest {
     @Mock private CourseRepository courseRepository;
     @Mock private ModuleRepository moduleRepository;
     @Mock private LessonRepository lessonRepository;
+    @Mock private EnrollmentRepository enrollmentRepository;
 
     private CourseService courseService;
 
@@ -42,7 +44,7 @@ class CourseServiceTest {
 
     @BeforeEach
     void setUp() {
-        courseService = new CourseService(courseRepository, moduleRepository, lessonRepository);
+        courseService = new CourseService(courseRepository, moduleRepository, lessonRepository, enrollmentRepository);
 
         creator = User.builder().id(UUID.randomUUID()).role(Role.CREATOR).name("Creator One").build();
         otherCreator = User.builder().id(UUID.randomUUID()).role(Role.CREATOR).name("Creator Two").build();
@@ -105,6 +107,16 @@ class CourseServiceTest {
     }
 
     @Test
+    void getById_hidesDraftCourse_fromAnonymousRequester() {
+        Course draft = courseOwnedBy(creator);
+        when(courseRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+
+        assertThatThrownBy(() -> courseService.getById(draft.getId(), null))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasFieldOrPropertyWithValue("statusCode", HttpStatus.NOT_FOUND);
+    }
+
+    @Test
     void getById_showsDraftCourse_toOwner() {
         Course draft = courseOwnedBy(creator);
         draft.setStatus(CourseStatus.DRAFT);
@@ -121,13 +133,16 @@ class CourseServiceTest {
 
         assertThatThrownBy(() -> courseService.setStatus(course.getId(), CourseStatus.PUBLISHED, creator))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("no modules");
+                .hasMessageContaining("no lessons");
     }
 
     @Test
     void setStatus_allowsPublishing_whenCourseHasAtLeastOneModule() {
         Course course = courseOwnedBy(creator);
-        course.getModules().add(CourseModule.builder().id(UUID.randomUUID()).course(course).title("Intro").build());
+        CourseModule module = CourseModule.builder().id(UUID.randomUUID()).course(course).title("Intro")
+                .lessons(new java.util.ArrayList<>()).build();
+        module.getLessons().add(com.learncreator.courses.entity.Lesson.builder().module(module).title("Lesson").build());
+        course.getModules().add(module);
         when(courseRepository.findById(course.getId())).thenReturn(Optional.of(course));
 
         var response = courseService.setStatus(course.getId(), CourseStatus.PUBLISHED, creator);

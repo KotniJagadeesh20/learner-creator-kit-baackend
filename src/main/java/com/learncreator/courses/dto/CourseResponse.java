@@ -57,4 +57,15 @@ public record CourseResponse(
                 course.getCreatedAt()
         );
     }
+
+    public static CourseResponse publicDetails(Course course) {
+        CourseResponse response = from(course);
+        return new CourseResponse(
+                response.id(), response.title(), response.description(), response.thumbnailUrl(),
+                response.category(), response.level(), response.status(), response.price(),
+                response.creatorId(), response.creatorName(),
+                course.getModules().stream().map(ModuleResponse::publicMetadata).collect(Collectors.toList()),
+                response.createdAt()
+        );
+    }
 }

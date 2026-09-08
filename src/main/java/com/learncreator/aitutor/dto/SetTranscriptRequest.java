@@ -1,6 +1,7 @@
 package com.learncreator.aitutor.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * Manual transcript entry — a stopgap until automatic generation (Whisper, triggered after
@@ -9,5 +10,6 @@ import jakarta.validation.constraints.NotBlank;
  */
 public record SetTranscriptRequest(
         @NotBlank(message = "transcriptText is required")
+        @Size(max = 500000, message = "transcriptText must be at most 500000 characters")
         String transcriptText
 ) {}

@@ -8,10 +8,12 @@ spring:
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
+  flyway:
+    enabled: false
+
   jpa:
     hibernate:
-      # use 'validate' once you introduce Flyway/Liquibase migrations.
-      # 'update' is fine while iterating locally in early development.
+      # Development convenience; the production profile uses Flyway and switches this to validate.
       ddl-auto: update
     show-sql: false
     properties:
@@ -21,13 +23,10 @@ spring:
 
   # AI tutor (see AITUTOR.md). Two vendors deliberately: OpenAI for embeddings, Anthropic for chat.
   ai:
+    model:
+      chat: anthropic
     openai:
       api-key: ${OPENAI_API_KEY:}
-      chat:
-        # Disabled on purpose — both the OpenAI and Anthropic starters auto-configure a ChatModel
-        # bean, which is ambiguous with both on the classpath. We only want OpenAI's EmbeddingModel;
-        # Anthropic supplies the ChatModel used for actually answering questions.
-        enabled: false
       embedding:
         options:
           model: text-embedding-3-small

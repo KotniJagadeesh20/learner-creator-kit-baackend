@@ -37,6 +37,7 @@ class TranscriptionServiceTest {
     @Mock private EmbeddingIndexService embeddingIndexService;
     @Mock private CloudflareStreamClient cloudflareStreamClient;
     @Mock private Model<AudioTranscriptionPrompt, AudioTranscriptionResponse> audioTranscriptionModel;
+    @Mock private TranscriptionJobLauncher transcriptionJobLauncher;
 
     private TranscriptionService service;
 
@@ -50,7 +51,7 @@ class TranscriptionServiceTest {
     void setUp() {
         service = new TranscriptionService(
                 transcriptRepository, lessonRepository, embeddingIndexService,
-                cloudflareStreamClient, audioTranscriptionModel
+                cloudflareStreamClient, audioTranscriptionModel, transcriptionJobLauncher
         );
 
         creator = User.builder().id(UUID.randomUUID()).role(Role.CREATOR).build();
@@ -91,7 +92,7 @@ class TranscriptionServiceTest {
 
     @Test
     void generateTranscriptAutomatically_rejects_whenRequesterDoesNotOwnCourse() {
-        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByIdForUpdate(lesson.getId())).thenReturn(Optional.of(lesson));
 
         assertThatThrownBy(() -> service.generateTranscriptAutomatically(lesson.getId(), otherCreator))
                 .isInstanceOf(ResponseStatusException.class)
@@ -101,16 +102,12 @@ class TranscriptionServiceTest {
     }
 
     @Test
-    void generateTranscriptAutomatically_marksFailed_whenLessonHasNoVideo() {
+    void generateTranscriptAutomatically_rejects_whenLessonHasNoVideo() {
         Lesson lessonWithNoVideo = Lesson.builder().id(UUID.randomUUID()).module(module).title("No video yet").build();
-        when(lessonRepository.findById(lessonWithNoVideo.getId())).thenReturn(Optional.of(lessonWithNoVideo));
-        when(transcriptRepository.findByLessonId(lessonWithNoVideo.getId())).thenReturn(Optional.empty());
-
-        service.generateTranscriptAutomatically(lessonWithNoVideo.getId(), creator);
-
-        ArgumentCaptor<LessonTranscript> captor = ArgumentCaptor.forClass(LessonTranscript.class);
-        verify(transcriptRepository, atLeastOnce()).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(TranscriptStatus.FAILED);
+        when(lessonRepository.findByIdForUpdate(lessonWithNoVideo.getId())).thenReturn(Optional.of(lessonWithNoVideo));
+        assertThatThrownBy(() -> service.generateTranscriptAutomatically(lessonWithNoVideo.getId(), creator))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasFieldOrPropertyWithValue("statusCode", HttpStatus.BAD_REQUEST);
         verifyNoInteractions(cloudflareStreamClient); // never even attempted Cloudflare — failed before that
     }
 

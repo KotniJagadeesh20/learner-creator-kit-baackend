@@ -28,7 +28,7 @@ This is the first module of the backend: authentication with an access/refresh t
    **Never reuse the default JWT_SECRET outside local development.**
 3. Run it:
    ```
-   ./mvnw spring-boot:run
+   mvn spring-boot:run
    ```
    `ddl-auto: update` will create the `users` and `refresh_tokens` tables automatically on first run.
    (Swap this for Flyway/Liquibase migrations before this touches production data.)
@@ -401,7 +401,7 @@ through the whole flow by hand every time you restart the database.
 
 **Maven (local, no Docker):**
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.profiles=seed
+mvn spring-boot:run -Dspring-boot.run.profiles=seed
 ```
 
 **Docker Compose:**

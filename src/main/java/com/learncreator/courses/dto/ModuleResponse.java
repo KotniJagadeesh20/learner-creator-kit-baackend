@@ -20,4 +20,11 @@ public record ModuleResponse(
                 module.getLessons().stream().map(LessonResponse::from).collect(Collectors.toList())
         );
     }
+
+    public static ModuleResponse publicMetadata(CourseModule module) {
+        return new ModuleResponse(
+                module.getId(), module.getTitle(), module.getOrderIndex(),
+                module.getLessons().stream().map(LessonResponse::publicMetadata).collect(Collectors.toList())
+        );
+    }
 }
